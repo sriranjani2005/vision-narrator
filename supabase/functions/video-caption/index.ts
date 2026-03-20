@@ -13,9 +13,9 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const callAI = async (messages: any[], tools?: any[], tool_choice?: any) => {
+    const callAI = async (messages: any[], tools?: any[], tool_choice?: any, model?: string) => {
       const body: any = {
-        model: "google/gemini-3-flash-preview",
+        model: model || "google/gemini-2.5-flash",
         messages,
       };
       if (tools) {
@@ -48,15 +48,13 @@ serve(async (req) => {
       return { data };
     };
 
-    // ACTION: Generate captions for frames
+    // ACTION: Generate captions from actual frame images
     if (action === "caption") {
-      const frameDescriptions = frames.map((f: any) => `Frame at ${f.timeLabel}`);
-      
       const tools = [{
         type: "function",
         function: {
           name: "generate_captions",
-          description: "Generate descriptive captions for video frames from a CCTV surveillance perspective",
+          description: "Generate descriptive captions for video frames based on actual visual content",
           parameters: {
             type: "object",
             properties: {
@@ -67,7 +65,7 @@ serve(async (req) => {
                   properties: {
                     timeLabel: { type: "string" },
                     caption: { type: "string" },
-                    importance: { type: "number", description: "Attention weight 0-1 indicating frame importance" },
+                    importance: { type: "number", description: "Attention weight 0-1 indicating frame importance based on visual activity" },
                   },
                   required: ["timeLabel", "caption", "importance"],
                 },
@@ -78,34 +76,62 @@ serve(async (req) => {
         },
       }];
 
+      // Build multimodal content with actual frame images
+      const userContent: any[] = [];
+      
+      userContent.push({
+        type: "text",
+        text: `Analyze these ${frames.length} video frames and generate a caption for each one. The frames are extracted at the following timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}. Describe ONLY what you can actually see in each image.`,
+      });
+
+      for (const frame of frames) {
+        if (frame.imageBase64) {
+          // The dataUrl is like "data:image/jpeg;base64,..."
+          const base64Data = frame.imageBase64.includes(",")
+            ? frame.imageBase64.split(",")[1]
+            : frame.imageBase64;
+          
+          userContent.push({
+            type: "text",
+            text: `Frame at [${frame.timeLabel}]:`,
+          });
+          userContent.push({
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${base64Data}`,
+            },
+          });
+        }
+      }
+
       const result = await callAI([
         {
           role: "system",
-          content: `You are a CCTV video analysis AI using a Hierarchical Attention-based Video Captioning Model (HAVCM).
+          content: `You are a video frame analysis AI. You MUST describe ONLY what is actually visible in each provided image.
 
 STRICT RULES:
-- Describe ONLY what is clearly visible in the frame.
-- DO NOT assume intent, crime, or emotions.
-- DO NOT use words like "theft", "attack", "security breach", "suspicious" unless visually 100% obvious.
+- Describe ONLY what you can clearly SEE in the image.
+- This could be ANY type of video: nature, comedy, sports, CCTV, music video, documentary, animation, etc.
+- DO NOT assume the video type — look at the actual content.
+- DO NOT assume intent, crime, or emotions unless visually 100% obvious.
+- DO NOT hallucinate objects or people that are not clearly visible.
+- DO NOT use words like "theft", "attack", "security breach", "suspicious" unless visually undeniable.
 - Use neutral, factual, and simple language.
-- Focus only on: people, objects, movements, positions.
-- If the scene is unclear or nothing is happening, say: "No significant activity is visible."
-- Keep captions short (1 sentence only).
-- Treat frames as a sequence: same person = "the person". Do not introduce new assumptions.
-- If unsure, say "Scene unclear" instead of guessing.
+- Focus on: people, animals, objects, scenery, movements, positions, colors, environment.
+- If the image is unclear or too dark/blurry: say "No clear activity visible."
+- Keep captions short (1-2 sentences max).
+- Treat frames as a sequence: maintain consistency (same person = "the person", same animal = "the animal").
+- If confidence in what you see is below 80%, say "No clear activity visible."
 
-For each frame, also assign an attention/importance weight (0.0-1.0):
-- Higher for frames with visible activity or movement.
-- Lower for empty or static scenes.
-
-Since you don't have the actual images, generate realistic neutral CCTV-style captions based on common surveillance scenarios. Vary the scenes but keep language factual and non-speculative.`
+For each frame, assign an attention/importance weight (0.0-1.0):
+- Higher for frames with visible activity, movement, or significant content.
+- Lower for static, empty, or unclear scenes.`
         },
         {
           role: "user",
-          content: `Generate captions for ${frames.length} video frames extracted at these timestamps: ${frameDescriptions.join(", ")}. 
-The video appears to be from a surveillance/CCTV camera. Generate realistic, varied captions for each frame as if you were analyzing the visual content.`
+          content: userContent,
         }
-      ], tools, { type: "function", function: { name: "generate_captions" } });
+      ], tools, { type: "function", function: { name: "generate_captions" } }, "google/gemini-2.5-flash");
 
       if (result.error) {
         return new Response(JSON.stringify({ error: result.error }), {
@@ -118,7 +144,7 @@ The video appears to be from a surveillance/CCTV camera. Generate realistic, var
       if (toolCall) {
         captionData = JSON.parse(toolCall.function.arguments);
       } else {
-        captionData = { captions: frames.map((f: any) => ({ timeLabel: f.timeLabel, caption: "Activity detected in frame", importance: 0.5 })) };
+        captionData = { captions: frames.map((f: any) => ({ timeLabel: f.timeLabel, caption: "No clear activity visible.", importance: 0.3 })) };
       }
 
       return new Response(JSON.stringify(captionData), {
@@ -144,7 +170,7 @@ The video appears to be from a surveillance/CCTV camera. Generate realistic, var
                 items: { type: "string" },
                 description: "Key events identified in the video"
               },
-              alertLevel: { type: "string", enum: ["normal", "attention", "alert"], description: "Overall alert level for CCTV monitoring" }
+              alertLevel: { type: "string", enum: ["normal", "attention", "alert"], description: "Overall alert level" }
             },
             required: ["summary", "keyEvents", "alertLevel"],
           },
@@ -154,16 +180,17 @@ The video appears to be from a surveillance/CCTV camera. Generate realistic, var
       const result = await callAI([
         {
           role: "system",
-          content: `You are a CCTV surveillance summary AI.
+          content: `You are a video summary AI. Summarize the video based ONLY on the provided captions.
 
 STRICT RULES:
-- Do NOT exaggerate or assume crime or intent.
-- Only summarize what is described in the captions.
-- Keep it factual and neutral.
-- Generate 3-5 key events as short bullet points.
-- Alert level should be "normal" unless captions clearly describe dangerous or unusual activity.`
+- Do NOT exaggerate or assume anything beyond what the captions describe.
+- Do NOT assume crime, intent, or danger unless explicitly described.
+- Keep the summary factual and neutral.
+- Generate 3-5 key events as short bullet points based on what was described.
+- Alert level should be "normal" unless captions clearly describe dangerous or unusual activity.
+- This could be ANY type of video (nature, comedy, sports, CCTV, etc.) — adapt your summary tone accordingly.`
         },
-        { role: "user", content: `Summarize this CCTV footage based on these frame captions:\n${captionText}` }
+        { role: "user", content: `Summarize this video based on these frame captions:\n${captionText}` }
       ], tools, { type: "function", function: { name: "generate_summary" } });
 
       if (result.error) {
@@ -218,7 +245,7 @@ STRICT RULES:
       const result = await callAI([
         {
           role: "system",
-          content: `You are a professional translator. Translate the given CCTV captions and summary accurately to the target language. Maintain original meaning. Do NOT add or remove information. Keep it simple and natural. Preserve timestamps as-is. If unsure, say: "Scene unclear" instead of guessing.`
+          content: `You are a professional translator. Translate the given captions and summary accurately to the target language. Maintain original meaning. Do NOT add or remove information. Keep it simple and natural. Preserve timestamps as-is.`
         },
         {
           role: "user",
