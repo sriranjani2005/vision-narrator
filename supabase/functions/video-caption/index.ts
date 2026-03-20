@@ -49,7 +49,11 @@ serve(async (req) => {
       try {
         const url = new URL(youtubeUrl);
         if (url.hostname.includes("youtu.be")) {
-          videoId = url.pathname.slice(1);
+          videoId = url.pathname.slice(1).split("?")[0];
+        } else if (url.pathname.startsWith("/shorts/")) {
+          videoId = url.pathname.replace("/shorts/", "").split("?")[0];
+        } else if (url.pathname.startsWith("/embed/")) {
+          videoId = url.pathname.replace("/embed/", "").split("?")[0];
         } else {
           videoId = url.searchParams.get("v") || "";
         }
