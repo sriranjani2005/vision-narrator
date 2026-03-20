@@ -218,7 +218,7 @@ STRICT RULES:
       const result = await callAI([
         {
           role: "system",
-          content: `You are a professional translator. Translate the given CCTV captions and summary accurately to the target language. Preserve timestamps as-is.`
+          content: `You are a professional translator. Translate the given CCTV captions and summary accurately to the target language. Maintain original meaning. Do NOT add or remove information. Keep it simple and natural. Preserve timestamps as-is. If unsure, say: "Scene unclear" instead of guessing.`
         },
         {
           role: "user",
