@@ -81,18 +81,24 @@ serve(async (req) => {
       const result = await callAI([
         {
           role: "system",
-          content: `You are a CCTV video analysis AI using a Hierarchical Attention-based Video Captioning Model (HAVCM). 
-You analyze video frames extracted from surveillance footage. For each frame, generate:
-1. A descriptive caption of what's happening (focus on people, objects, movements, events)
-2. An attention/importance weight (0.0-1.0) - higher for frames with significant activity, motion, or events
+          content: `You are a CCTV video analysis AI using a Hierarchical Attention-based Video Captioning Model (HAVCM).
 
-Simulate the CNN→BiLSTM→Attention→Transformer pipeline:
-- CNN: Extract spatial features (objects, people, scenes)
-- BiLSTM: Consider temporal context (what happened before/after)
-- Attention: Weight important frames higher
-- Transformer: Generate natural language captions
+STRICT RULES:
+- Describe ONLY what is clearly visible in the frame.
+- DO NOT assume intent, crime, or emotions.
+- DO NOT use words like "theft", "attack", "security breach", "suspicious" unless visually 100% obvious.
+- Use neutral, factual, and simple language.
+- Focus only on: people, objects, movements, positions.
+- If the scene is unclear or nothing is happening, say: "No significant activity is visible."
+- Keep captions short (1 sentence only).
+- Treat frames as a sequence: same person = "the person". Do not introduce new assumptions.
+- If unsure, say "Scene unclear" instead of guessing.
 
-Since you don't have the actual images, generate realistic CCTV-style captions based on common surveillance scenarios. Make them varied and realistic.`
+For each frame, also assign an attention/importance weight (0.0-1.0):
+- Higher for frames with visible activity or movement.
+- Lower for empty or static scenes.
+
+Since you don't have the actual images, generate realistic neutral CCTV-style captions based on common surveillance scenarios. Vary the scenes but keep language factual and non-speculative.`
         },
         {
           role: "user",
@@ -148,7 +154,14 @@ The video appears to be from a surveillance/CCTV camera. Generate realistic, var
       const result = await callAI([
         {
           role: "system",
-          content: "You are a CCTV surveillance summary AI. Analyze the frame-by-frame captions and produce a coherent video summary, key events, and an alert level assessment."
+          content: `You are a CCTV surveillance summary AI.
+
+STRICT RULES:
+- Do NOT exaggerate or assume crime or intent.
+- Only summarize what is described in the captions.
+- Keep it factual and neutral.
+- Generate 3-5 key events as short bullet points.
+- Alert level should be "normal" unless captions clearly describe dangerous or unusual activity.`
         },
         { role: "user", content: `Summarize this CCTV footage based on these frame captions:\n${captionText}` }
       ], tools, { type: "function", function: { name: "generate_summary" } });
@@ -205,7 +218,7 @@ The video appears to be from a surveillance/CCTV camera. Generate realistic, var
       const result = await callAI([
         {
           role: "system",
-          content: `You are a professional translator. Translate the given CCTV captions and summary accurately to the target language. Preserve timestamps as-is.`
+          content: `You are a professional translator. Translate the given CCTV captions and summary accurately to the target language. Maintain original meaning. Do NOT add or remove information. Keep it simple and natural. Preserve timestamps as-is. If unsure, say: "Scene unclear" instead of guessing.`
         },
         {
           role: "user",
