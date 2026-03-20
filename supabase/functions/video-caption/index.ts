@@ -192,17 +192,20 @@ Keep each caption 1-3 sentences. Be descriptive and specific, not generic.`
       const result = await callAI([
         {
           role: "system",
-          content: `You are a video summary AI. Summarize the video based ONLY on the provided captions.
+          content: `You are a video summary AI. Based on the frame captions, write a coherent summary that captures the ESSENCE and NARRATIVE of the video.
 
-STRICT RULES:
-- Do NOT exaggerate or assume anything beyond what the captions describe.
-- Do NOT assume crime, intent, or danger unless explicitly described.
-- Keep the summary factual and neutral.
-- Generate 3-5 key events as short bullet points based on what was described.
-- Alert level should be "normal" unless captions clearly describe dangerous or unusual activity.
-- This could be ANY type of video (nature, comedy, sports, CCTV, etc.) — adapt your summary tone accordingly.`
+RULES:
+- Tell the viewer WHAT HAPPENED in the video from start to end.
+- Identify the type/genre of video (nature, comedy, sports, CCTV, tutorial, etc.) and adapt your tone.
+- Highlight the most interesting or significant moments.
+- For nature: describe the journey, the environment, what was beautiful or notable.
+- For comedy/entertainment: describe the funny moments, reactions, punchlines.
+- For CCTV: describe the sequence of movements and interactions factually.
+- Generate 3-5 key events as short bullet points capturing the most important moments.
+- Alert level: "normal" unless clearly dangerous activity is described.
+- Be engaging and descriptive, not robotic.`
         },
-        { role: "user", content: `Summarize this video based on these frame captions:\n${captionText}` }
+        { role: "user", content: `Summarize this video based on these sequential frame captions:\n${captionText}` }
       ], tools, { type: "function", function: { name: "generate_summary" } });
 
       if (result.error) {
