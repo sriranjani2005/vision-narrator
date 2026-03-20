@@ -146,8 +146,17 @@ serve(async (req) => {
       
       userContent.push({
         type: "text",
-        text: `Analyze these ${frames.length} sequential video frames at timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}. For EACH frame, describe what is HAPPENING — the actions, events, interactions, and changes.`,
+        text: `You are analyzing ${frames.length} sequential frames extracted from a single continuous video at these timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}.
+
+CRITICAL INSTRUCTIONS:
+- Look at EACH image VERY CAREFULLY before writing anything.
+- Describe ONLY what you can ACTUALLY SEE in each specific frame — not what you think should be there.
+- Each frame is DIFFERENT — look at the details: positions of people/objects change, backgrounds shift, actions progress.
+- If two frames look similar, find the DIFFERENCES — even small ones matter (hand position, facial expression, camera angle, lighting).
+- NEVER copy-paste the same caption for different frames.
+- Describe the CORE ACTIVITY: What is the main thing happening? Why would someone watch this video?`,
       });
+
 
       for (const frame of frames) {
         if (frame.imageBase64) {
