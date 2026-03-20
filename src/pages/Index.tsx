@@ -11,6 +11,7 @@ import FrameCaptionDisplay from "@/components/FrameCaptionDisplay";
 import SummaryDisplay from "@/components/SummaryDisplay";
 import TranslationPanel from "@/components/TranslationPanel";
 import ArchitectureDiagram from "@/components/ArchitectureDiagram";
+import ExportButton from "@/components/ExportButton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -198,18 +199,31 @@ const Index: React.FC = () => {
                 <span className="font-mono text-xs text-muted-foreground">
                   📂 {videoName}
                 </span>
-                {captions.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      id="show-frames"
-                      checked={showFrames}
-                      onCheckedChange={setShowFrames}
+                <div className="flex items-center gap-4">
+                  {captions.length > 0 && summaryResult && (
+                    <ExportButton
+                      videoName={videoName}
+                      captions={captions}
+                      summary={summaryResult.summary}
+                      keyEvents={summaryResult.keyEvents}
+                      alertLevel={summaryResult.alertLevel}
+                      translatedCaptions={translatedCaptions}
+                      translatedSummary={translatedSummary}
                     />
-                    <Label htmlFor="show-frames" className="text-xs text-muted-foreground">
-                      Show frames
-                    </Label>
-                  </div>
-                )}
+                  )}
+                  {captions.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="show-frames"
+                        checked={showFrames}
+                        onCheckedChange={setShowFrames}
+                      />
+                      <Label htmlFor="show-frames" className="text-xs text-muted-foreground">
+                        Show frames
+                      </Label>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
