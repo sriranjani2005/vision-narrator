@@ -75,7 +75,10 @@ const Index: React.FC = () => {
       const { data: captionData, error: captionError } = await supabase.functions.invoke("video-caption", {
         body: {
           action: "caption",
-          frames: extracted.map((f) => ({ timeLabel: f.timeLabel })),
+          frames: extracted.map((f) => ({
+            timeLabel: f.timeLabel,
+            imageBase64: f.dataUrl,
+          })),
         },
       });
       if (captionError) throw captionError;
