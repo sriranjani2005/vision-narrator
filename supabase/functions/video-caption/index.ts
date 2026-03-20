@@ -81,7 +81,7 @@ serve(async (req) => {
       
       userContent.push({
         type: "text",
-        text: `Analyze these ${frames.length} video frames and generate a caption for each one. The frames are extracted at the following timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}. Describe ONLY what you can actually see in each image.`,
+        text: `You are watching ${frames.length} sequential frames from a video at timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}. Describe what is HAPPENING in each frame — focus on actions, events, and changes between frames. Tell the story of the video.`,
       });
 
       for (const frame of frames) {
@@ -107,37 +107,37 @@ serve(async (req) => {
       const result = await callAI([
         {
           role: "system",
-          content: `You are a precise visual description AI. Your ONLY job is to describe what is LITERALLY VISIBLE in each image frame.
+          content: `You are an expert video captioning AI. You watch a sequence of frames from a video and describe what is HAPPENING — not just what objects exist.
 
-CRITICAL — THIS IS A PURE VISION TASK:
-1. LOOK at each image carefully before writing anything.
-2. Describe ONLY objects, people, animals, scenery, colors, and movements you can ACTUALLY SEE.
-3. This can be ANY type of video — nature, comedy, sports, animation, documentary, CCTV, music video, tutorial, etc.
-4. DO NOT guess what type of video this is. Let the visual content speak for itself.
-5. DO NOT assume context beyond what is visible (no intent, no emotion, no story).
-6. DO NOT hallucinate or fabricate objects/people that are not clearly in the image.
+YOUR GOAL: Capture the STORY and ESSENCE of the video. What are people/animals/objects DOING? What is changing? What is the narrative?
 
-FORBIDDEN WORDS (unless 100% visually undeniable):
-- "suspicious", "theft", "attack", "crime", "security breach", "trying to", "attempting to"
-- "seems to", "appears to be planning", "might be"
+RULES:
+1. Describe ACTIONS and EVENTS, not just static objects. Bad: "A dog is visible." Good: "A dog runs across a grassy field chasing a ball."
+2. Each frame caption should advance the story. Avoid repeating the same description across frames — note what CHANGED.
+3. Include context: WHERE is this happening? WHAT is the setting? What is the MOOD/atmosphere if visually obvious?
+4. For nature videos: describe the landscape, weather changes, animal behavior, water flow, etc.
+5. For comedy/entertainment: describe the actions, reactions, physical comedy, scene transitions.
+6. For CCTV/surveillance: describe movements, entries/exits, interactions between people.
+7. For sports: describe plays, movements, scores if visible.
+8. For any video type: capture what makes the scene interesting or significant.
 
-WHAT TO DESCRIBE:
-- People: count, position, clothing color/type, visible actions (walking, sitting, standing, holding)
-- Animals: type, position, movement
-- Objects: what they are, where they are
-- Environment: indoor/outdoor, lighting, colors, weather if visible
-- Movement: direction, speed description (walking, running, still)
+WHAT TO DESCRIBE IN EACH FRAME:
+- WHO/WHAT is doing something (people, animals, vehicles, natural elements)
+- WHAT action is happening (running, falling, blooming, flowing, talking, cooking)
+- WHERE it's happening (indoor/outdoor, specific setting details)
+- HOW things are changing from the previous frame
+- Any notable visual details (colors, lighting, weather, expressions if clear)
 
-CONFIDENCE RULE:
-- If you cannot clearly identify what is in the frame → output exactly: "No clear activity visible."
-- If confidence < 80% in what you see → "No clear activity visible."
+TEMPORAL CONSISTENCY:
+- Treat frames as a SEQUENCE telling a story
+- Reference previous frames: "The person now moves toward...", "The wave grows larger..."
+- Same entity across frames = consistent reference ("the person", "the dog")
 
-TEMPORAL CONSISTENCY (for sequential frames):
-- Same person across frames = "the person" (not "a new person")
-- Same animal = "the animal"
-- Do NOT randomly introduce new entities
+CONFIDENCE:
+- If a frame is too dark/blurry to see anything: "Scene is unclear."
+- Otherwise, describe what you see with descriptive, engaging language.
 
-Keep each caption to 1-2 factual sentences. No storytelling. No assumptions.`
+Keep each caption 1-3 sentences. Be descriptive and specific, not generic.`
         },
         {
           role: "user",
@@ -192,17 +192,20 @@ Keep each caption to 1-2 factual sentences. No storytelling. No assumptions.`
       const result = await callAI([
         {
           role: "system",
-          content: `You are a video summary AI. Summarize the video based ONLY on the provided captions.
+          content: `You are a video summary AI. Based on the frame captions, write a coherent summary that captures the ESSENCE and NARRATIVE of the video.
 
-STRICT RULES:
-- Do NOT exaggerate or assume anything beyond what the captions describe.
-- Do NOT assume crime, intent, or danger unless explicitly described.
-- Keep the summary factual and neutral.
-- Generate 3-5 key events as short bullet points based on what was described.
-- Alert level should be "normal" unless captions clearly describe dangerous or unusual activity.
-- This could be ANY type of video (nature, comedy, sports, CCTV, etc.) — adapt your summary tone accordingly.`
+RULES:
+- Tell the viewer WHAT HAPPENED in the video from start to end.
+- Identify the type/genre of video (nature, comedy, sports, CCTV, tutorial, etc.) and adapt your tone.
+- Highlight the most interesting or significant moments.
+- For nature: describe the journey, the environment, what was beautiful or notable.
+- For comedy/entertainment: describe the funny moments, reactions, punchlines.
+- For CCTV: describe the sequence of movements and interactions factually.
+- Generate 3-5 key events as short bullet points capturing the most important moments.
+- Alert level: "normal" unless clearly dangerous activity is described.
+- Be engaging and descriptive, not robotic.`
         },
-        { role: "user", content: `Summarize this video based on these frame captions:\n${captionText}` }
+        { role: "user", content: `Summarize this video based on these sequential frame captions:\n${captionText}` }
       ], tools, { type: "function", function: { name: "generate_summary" } });
 
       if (result.error) {
