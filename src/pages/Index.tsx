@@ -11,6 +11,7 @@ import FrameCaptionDisplay from "@/components/FrameCaptionDisplay";
 import SummaryDisplay from "@/components/SummaryDisplay";
 import TranslationPanel from "@/components/TranslationPanel";
 import ArchitectureDiagram from "@/components/ArchitectureDiagram";
+import ExportButton from "@/components/ExportButton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
