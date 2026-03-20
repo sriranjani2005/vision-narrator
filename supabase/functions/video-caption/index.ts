@@ -81,7 +81,7 @@ serve(async (req) => {
       
       userContent.push({
         type: "text",
-        text: `Analyze these ${frames.length} video frames and generate a caption for each one. The frames are extracted at the following timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}. Describe ONLY what you can actually see in each image.`,
+        text: `You are watching ${frames.length} sequential frames from a video at timestamps: ${frames.map((f: any) => f.timeLabel).join(", ")}. Describe what is HAPPENING in each frame — focus on actions, events, and changes between frames. Tell the story of the video.`,
       });
 
       for (const frame of frames) {
