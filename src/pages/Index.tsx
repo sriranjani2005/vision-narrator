@@ -1,16 +1,259 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import React, { useState, useCallback } from "react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { Camera, Cpu } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { extractFrames, type ExtractedFrame } from "@/lib/frameExtractor";
+import { type LanguageCode } from "@/lib/languages";
+import VideoUpload from "@/components/VideoUpload";
+import ProcessingPipeline from "@/components/ProcessingPipeline";
+import FrameCaptionDisplay from "@/components/FrameCaptionDisplay";
+import SummaryDisplay from "@/components/SummaryDisplay";
+import TranslationPanel from "@/components/TranslationPanel";
+import ArchitectureDiagram from "@/components/ArchitectureDiagram";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+interface CaptionResult {
+  timeLabel: string;
+  caption: string;
+  importance: number;
+}
+
+interface SummaryResult {
+  summary: string;
+  keyEvents: string[];
+  alertLevel: "normal" | "attention" | "alert";
+}
+
+const PIPELINE_STAGES = [
+  "Frame Extraction",
+  "CNN Feature Extraction (EfficientNet-B0)",
+  "BiLSTM Temporal Modeling",
+  "Attention Mechanism",
+  "Transformer Caption Generation",
+  "Summary & Translation Ready",
+];
+
+const Index: React.FC = () => {
+  const [frames, setFrames] = useState<ExtractedFrame[]>([]);
+  const [captions, setCaptions] = useState<CaptionResult[]>([]);
+  const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
+  const [pipelineStage, setPipelineStage] = useState(-1);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showFrames, setShowFrames] = useState(true);
+  const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>("en");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedCaptions, setTranslatedCaptions] = useState<{ timeLabel: string; caption: string }[] | null>(null);
+  const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
+  const [videoName, setVideoName] = useState("");
+
+  const processVideo = useCallback(async (file: File) => {
+    setIsProcessing(true);
+    setCaptions([]);
+    setSummaryResult(null);
+    setTranslatedCaptions(null);
+    setTranslatedSummary(null);
+    setVideoName(file.name);
+
+    try {
+      // Stage 0: Frame Extraction
+      setPipelineStage(0);
+      toast.info("Extracting frames from video...");
+      const extracted = await extractFrames(file, 8);
+      setFrames(extracted);
+
+      // Stage 1-3: Simulated CNN + BiLSTM + Attention
+      for (let stage = 1; stage <= 3; stage++) {
+        setPipelineStage(stage);
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+
+      // Stage 4: Caption Generation
+      setPipelineStage(4);
+      toast.info("Generating captions with Transformer decoder...");
+      const { data: captionData, error: captionError } = await supabase.functions.invoke("video-caption", {
+        body: {
+          action: "caption",
+          frames: extracted.map((f) => ({ timeLabel: f.timeLabel })),
+        },
+      });
+      if (captionError) throw captionError;
+      if (captionData.error) throw new Error(captionData.error);
+      setCaptions(captionData.captions);
+
+      // Stage 5: Summary
+      setPipelineStage(5);
+      toast.info("Generating video summary...");
+      const { data: summaryData, error: summaryError } = await supabase.functions.invoke("video-caption", {
+        body: {
+          action: "summarize",
+          captions: captionData.captions,
+        },
+      });
+      if (summaryError) throw summaryError;
+      if (summaryData.error) throw new Error(summaryData.error);
+      setSummaryResult(summaryData);
+
+      toast.success("Video analysis complete!");
+    } catch (err: any) {
+      console.error("Processing error:", err);
+      toast.error(err.message || "Failed to process video");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, []);
+
+  const handleTranslate = useCallback(async () => {
+    if (!captions.length || !summaryResult) return;
+    setIsTranslating(true);
+    setTranslatedCaptions(null);
+    setTranslatedSummary(null);
+
+    try {
+      const langLabel = selectedLanguage;
+      const { data, error } = await supabase.functions.invoke("video-caption", {
+        body: {
+          action: "translate",
+          captions,
+          summary: summaryResult.summary,
+          targetLanguage: langLabel,
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      setTranslatedCaptions(data.translatedCaptions);
+      setTranslatedSummary(data.translatedSummary);
+      toast.success("Translation complete!");
+    } catch (err: any) {
+      toast.error(err.message || "Translation failed");
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [captions, summaryResult, selectedLanguage]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
+              <Camera className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">
+                HAVCM
+              </h1>
+              <p className="text-xs font-mono text-muted-foreground">
+                Hierarchical Attention-based Video Captioning
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-primary animate-pulse-glow" />
+            <span className="font-mono text-xs text-muted-foreground">
+              CNN → BiLSTM → Attention → Transformer
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        {/* Hero section when no video is uploaded */}
+        {!isProcessing && captions.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-10"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
+              AI-Powered <span className="text-primary glow-text">CCTV Analysis</span>
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Upload surveillance footage to automatically generate frame-level captions,
+              video summaries, and multilingual translations — no audio required.
+            </p>
+          </motion.div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left: Upload + Architecture */}
+          <div className="space-y-6">
+            <VideoUpload onFileSelect={processVideo} isProcessing={isProcessing} />
+            <ArchitectureDiagram />
+          </div>
+
+          {/* Right: Results */}
+          <div className="lg:col-span-2 space-y-6">
+            {isProcessing && (
+              <ProcessingPipeline currentStage={pipelineStage} stages={PIPELINE_STAGES} />
+            )}
+
+            {videoName && (
+              <div className="flex items-center justify-between bg-card border border-border rounded-lg px-4 py-3">
+                <span className="font-mono text-xs text-muted-foreground">
+                  📂 {videoName}
+                </span>
+                {captions.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="show-frames"
+                      checked={showFrames}
+                      onCheckedChange={setShowFrames}
+                    />
+                    <Label htmlFor="show-frames" className="text-xs text-muted-foreground">
+                      Show frames
+                    </Label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {captions.length > 0 && (
+              <>
+                <FrameCaptionDisplay
+                  frames={frames}
+                  captions={captions}
+                  showFrames={showFrames}
+                />
+
+                {summaryResult && (
+                  <SummaryDisplay
+                    summary={summaryResult.summary}
+                    keyEvents={summaryResult.keyEvents}
+                    alertLevel={summaryResult.alertLevel}
+                  />
+                )}
+
+                <TranslationPanel
+                  selectedLanguage={selectedLanguage}
+                  onLanguageChange={(lang) => {
+                    setSelectedLanguage(lang);
+                    setTranslatedCaptions(null);
+                    setTranslatedSummary(null);
+                  }}
+                  onTranslate={handleTranslate}
+                  isTranslating={isTranslating}
+                  translatedCaptions={translatedCaptions}
+                  translatedSummary={translatedSummary}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border mt-16 py-6">
+        <div className="container mx-auto px-4 text-center">
+          <p className="font-mono text-xs text-muted-foreground">
+            HAVCM — Designed for CCTV monitoring & accessibility
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
