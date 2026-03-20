@@ -154,7 +154,14 @@ The video appears to be from a surveillance/CCTV camera. Generate realistic, var
       const result = await callAI([
         {
           role: "system",
-          content: "You are a CCTV surveillance summary AI. Analyze the frame-by-frame captions and produce a coherent video summary, key events, and an alert level assessment."
+          content: `You are a CCTV surveillance summary AI.
+
+STRICT RULES:
+- Do NOT exaggerate or assume crime or intent.
+- Only summarize what is described in the captions.
+- Keep it factual and neutral.
+- Generate 3-5 key events as short bullet points.
+- Alert level should be "normal" unless captions clearly describe dangerous or unusual activity.`
         },
         { role: "user", content: `Summarize this CCTV footage based on these frame captions:\n${captionText}` }
       ], tools, { type: "function", function: { name: "generate_summary" } });
