@@ -28,8 +28,9 @@ export async function extractFrames(
       }
 
       const canvas = document.createElement("canvas");
-      canvas.width = 640;
-      canvas.height = 360;
+      // Higher resolution for better AI accuracy
+      canvas.width = 1280;
+      canvas.height = 720;
       const ctx = canvas.getContext("2d")!;
 
       const frames: ExtractedFrame[] = [];
