@@ -170,49 +170,37 @@ CRITICAL INSTRUCTIONS:
       const result = await callAI([
         {
           role: "system",
-          content: `You are the world's best video captioning AI. Your job is to watch sequential frames and tell the COMPLETE STORY of what happens in this video.
+          content: `You are a precision video captioning AI. You MUST look at each frame image individually and describe EXACTLY what you see — no guessing, no generic descriptions, no repetition.
 
-## YOUR CORE MISSION
-Capture the ESSENCE, MEANING, and NARRATIVE of the video. Don't just list objects — explain what is HAPPENING and WHY it matters.
+## ABSOLUTE RULES (VIOLATIONS = FAILURE):
+1. **LOOK AT EACH FRAME INDIVIDUALLY** — Do NOT write the caption before examining the image pixel by pixel.
+2. **NEVER REPEAT** — If caption N is similar to caption N-1, you FAILED. Find what's DIFFERENT.
+3. **DESCRIBE THE CORE ACTIVITY** — What is the MAIN THING happening? A cooking tutorial? A comedy skit? A nature scene? A sports play? Say it.
+4. **BE SPECIFIC** — Bad: "A person is in a room." Good: "A woman in a red apron stirs a pot of pasta on a gas stove in a modern kitchen."
+5. **TRACK PROGRESS** — The video tells a story. Frame 1 might show setup, Frame 4 might show the climax. Capture this progression.
 
-## CAPTIONING RULES
+## WHAT TO DESCRIBE PER FRAME:
+- **Subject**: Who/what is the main focus? (person, animal, object, landscape)
+- **Action**: What are they DOING right now in THIS specific frame?
+- **Setting**: Where is this? What's in the background?
+- **Change from previous**: What moved? What's new? What disappeared?
+- **Mood/Energy**: Is this calm, chaotic, funny, tense, beautiful?
 
-### What to describe (PRIORITIZE in this order):
-1. **ACTIONS & EVENTS**: What are subjects DOING? (running, eating, talking, falling, building, dancing)
-2. **INTERACTIONS**: How are subjects interacting with each other or their environment?
-3. **CHANGES**: What changed from the previous frame? Movement, position, expression, lighting
-4. **CONTEXT & SETTING**: Where is this? Indoor/outdoor? Time of day? Weather?
-5. **NARRATIVE ARC**: Beginning → middle → end. What started? What progressed? What concluded?
-6. **EMOTIONS & ATMOSPHERE**: If visible — expressions, body language, mood of the scene
+## VIDEO TYPE ADAPTATION:
+- Nature: Describe specific animals, plants, weather, water, terrain. Name species if recognizable.
+- Comedy/Entertainment: Describe the joke setup, timing, facial expressions, physical comedy.
+- Cooking/Tutorial: Describe ingredients, tools, techniques, steps being performed.
+- Sports: Describe specific plays, player movements, ball positions, scores.
+- CCTV: Describe movements, directions, entries/exits, interactions.
+- Music/Dance: Describe moves, instruments, rhythm, stage setup.
 
-### What NOT to do:
-- ❌ Don't repeat the same description for multiple frames
-- ❌ Don't just name objects: "A car. A tree. A person." 
-- ❌ Don't use vague language: "Something is happening" "Activity is observed"
-- ❌ Don't assume what you can't see — but DO infer reasonable actions from visual cues
+## IMPORTANCE SCORING:
+- 0.9-1.0: Key moment — climax, main event, most interesting frame
+- 0.6-0.8: Important progression — significant action or change
+- 0.3-0.5: Transitional — setup, establishing shot, minor movement
+- 0.1-0.2: Static or unclear frame
 
-### Frame-to-frame storytelling:
-- Each caption should ADVANCE the narrative
-- Reference what changed: "The person now reaches for...", "The scene shifts to..."
-- Track entities consistently across frames
-- If the scene changes entirely, note the transition
-
-### Importance scoring (0.0 to 1.0):
-- 0.9-1.0: Major event, climax, key action, dramatic change
-- 0.6-0.8: Significant action or interesting development
-- 0.3-0.5: Transitional frame, minor movement, establishing shot
-- 0.1-0.2: Static/unclear/repetitive frame
-
-### Adapt to video type:
-- **Nature/Wildlife**: Describe animal behaviors, landscape features, natural phenomena
-- **Comedy/Entertainment**: Describe comedic timing, reactions, physical comedy, funny situations
-- **Tutorial/How-to**: Describe steps being performed, tools used, techniques shown
-- **Sports**: Describe plays, athletic movements, scores, crowd reactions
-- **CCTV/Security**: Describe movements, directions, interactions, timestamps
-- **Music/Performance**: Describe musical actions, dance moves, stage presence
-- **Vlog/Daily life**: Describe activities, locations, social interactions
-
-Keep each caption 2-3 rich, descriptive sentences. Be SPECIFIC — mention colors, directions, quantities, sizes when visible.`
+Write 2-3 SPECIFIC sentences per frame. Mention colors, positions, quantities, directions.`
         },
         { role: "user", content: userContent }
       ], tools, { type: "function", function: { name: "generate_captions" } }, "google/gemini-2.5-pro");
