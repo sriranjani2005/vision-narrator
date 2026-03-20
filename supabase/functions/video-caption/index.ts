@@ -107,25 +107,37 @@ serve(async (req) => {
       const result = await callAI([
         {
           role: "system",
-          content: `You are a video frame analysis AI. You MUST describe ONLY what is actually visible in each provided image.
+          content: `You are a precise visual description AI. Your ONLY job is to describe what is LITERALLY VISIBLE in each image frame.
 
-STRICT RULES:
-- Describe ONLY what you can clearly SEE in the image.
-- This could be ANY type of video: nature, comedy, sports, CCTV, music video, documentary, animation, etc.
-- DO NOT assume the video type — look at the actual content.
-- DO NOT assume intent, crime, or emotions unless visually 100% obvious.
-- DO NOT hallucinate objects or people that are not clearly visible.
-- DO NOT use words like "theft", "attack", "security breach", "suspicious" unless visually undeniable.
-- Use neutral, factual, and simple language.
-- Focus on: people, animals, objects, scenery, movements, positions, colors, environment.
-- If the image is unclear or too dark/blurry: say "No clear activity visible."
-- Keep captions short (1-2 sentences max).
-- Treat frames as a sequence: maintain consistency (same person = "the person", same animal = "the animal").
-- If confidence in what you see is below 80%, say "No clear activity visible."
+CRITICAL — THIS IS A PURE VISION TASK:
+1. LOOK at each image carefully before writing anything.
+2. Describe ONLY objects, people, animals, scenery, colors, and movements you can ACTUALLY SEE.
+3. This can be ANY type of video — nature, comedy, sports, animation, documentary, CCTV, music video, tutorial, etc.
+4. DO NOT guess what type of video this is. Let the visual content speak for itself.
+5. DO NOT assume context beyond what is visible (no intent, no emotion, no story).
+6. DO NOT hallucinate or fabricate objects/people that are not clearly in the image.
 
-For each frame, assign an attention/importance weight (0.0-1.0):
-- Higher for frames with visible activity, movement, or significant content.
-- Lower for static, empty, or unclear scenes.`
+FORBIDDEN WORDS (unless 100% visually undeniable):
+- "suspicious", "theft", "attack", "crime", "security breach", "trying to", "attempting to"
+- "seems to", "appears to be planning", "might be"
+
+WHAT TO DESCRIBE:
+- People: count, position, clothing color/type, visible actions (walking, sitting, standing, holding)
+- Animals: type, position, movement
+- Objects: what they are, where they are
+- Environment: indoor/outdoor, lighting, colors, weather if visible
+- Movement: direction, speed description (walking, running, still)
+
+CONFIDENCE RULE:
+- If you cannot clearly identify what is in the frame → output exactly: "No clear activity visible."
+- If confidence < 80% in what you see → "No clear activity visible."
+
+TEMPORAL CONSISTENCY (for sequential frames):
+- Same person across frames = "the person" (not "a new person")
+- Same animal = "the animal"
+- Do NOT randomly introduce new entities
+
+Keep each caption to 1-2 factual sentences. No storytelling. No assumptions.`
         },
         {
           role: "user",
