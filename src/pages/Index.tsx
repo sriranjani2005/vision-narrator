@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Camera, Cpu } from "lucide-react";
+import { Camera, Cpu, Server, Cloud } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { extractFrames, type ExtractedFrame } from "@/lib/frameExtractor";
 import { type LanguageCode } from "@/lib/languages";
@@ -12,8 +12,10 @@ import SummaryDisplay from "@/components/SummaryDisplay";
 import TranslationPanel from "@/components/TranslationPanel";
 import ArchitectureDiagram from "@/components/ArchitectureDiagram";
 import ExportButton from "@/components/ExportButton";
+import PipelineLogs from "@/components/PipelineLogs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CaptionResult {
   timeLabel: string;
@@ -28,12 +30,12 @@ interface SummaryResult {
 }
 
 const PIPELINE_STAGES = [
-  "Frame Extraction",
+  "Frame Extraction (OpenCV)",
   "CNN Feature Extraction (EfficientNet-B0)",
-  "BiLSTM Temporal Modeling",
-  "Attention Mechanism",
-  "Transformer Caption Generation",
-  "Summary & Translation Ready",
+  "BiLSTM Temporal Modeling (2-layer, bidirectional)",
+  "Attention Mechanism (Multi-Head + Temporal)",
+  "Transformer Caption Decoder (BLIP)",
+  "TextRank Summary + Translation",
 ];
 
 const Index: React.FC = () => {
@@ -49,58 +51,146 @@ const Index: React.FC = () => {
   const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
   const [videoName, setVideoName] = useState("");
   const [frameCount, setFrameCount] = useState(12);
+  const [pipelineLogs, setPipelineLogs] = useState<string[]>([]);
+  const [backendMode, setBackendMode] = useState<"cloud" | "local">("cloud");
+  const [localBackendUrl, setLocalBackendUrl] = useState("http://localhost:8000");
 
-  const runCaptionPipeline = useCallback(async (
-    extractedFrames: { timeLabel: string; imageBase64: string }[],
-    name: string
-  ) => {
-    // Stage 1-3: Simulated CNN + BiLSTM + Attention
-    for (let stage = 1; stage <= 3; stage++) {
-      setPipelineStage(stage);
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-
-    // Stage 4: Caption Generation
-    setPipelineStage(4);
-    toast.info("Generating captions with Vision AI...");
-    const { data: captionData, error: captionError } = await supabase.functions.invoke("video-caption", {
-      body: {
-        action: "caption",
-        frames: extractedFrames,
-      },
-    });
-    if (captionError) throw captionError;
-    if (captionData.error) throw new Error(captionData.error);
-    setCaptions(captionData.captions);
-
-    // Stage 5: Summary
-    setPipelineStage(5);
-    toast.info("Generating video summary...");
-    const { data: summaryData, error: summaryError } = await supabase.functions.invoke("video-caption", {
-      body: {
-        action: "summarize",
-        captions: captionData.captions,
-      },
-    });
-    if (summaryError) throw summaryError;
-    if (summaryData.error) throw new Error(summaryData.error);
-    setSummaryResult(summaryData);
-    toast.success("Video analysis complete!");
-  }, []);
-
-  const processVideo = useCallback(async (file: File) => {
+  // =============================================
+  // LOCAL BACKEND (FastAPI + PyTorch) PIPELINE
+  // =============================================
+  const processVideoLocal = useCallback(async (file: File) => {
     setIsProcessing(true);
     setCaptions([]);
     setSummaryResult(null);
     setTranslatedCaptions(null);
     setTranslatedSummary(null);
+    setPipelineLogs([]);
     setVideoName(file.name);
 
     try {
       setPipelineStage(0);
+      toast.info("Sending video to DL backend...");
+      setPipelineLogs(prev => [...prev, `[0.00s] Uploading ${file.name} to HAVCM backend...`]);
+
+      const formData = new FormData();
+      formData.append("video", file);
+      formData.append("num_frames", String(frameCount));
+
+      // Simulate pipeline stages with timing
+      const stageTimer = setInterval(() => {
+        setPipelineStage(prev => Math.min(prev + 1, 5));
+      }, 2000);
+
+      const response = await fetch(`${localBackendUrl}/generate-caption`, {
+        method: "POST",
+        body: formData,
+      });
+
+      clearInterval(stageTimer);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Backend error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setPipelineStage(5);
+
+      // Set pipeline logs from backend
+      if (data.pipeline_logs) {
+        setPipelineLogs(data.pipeline_logs);
+      }
+
+      // Convert backend response to frontend format
+      const extractedFrames: ExtractedFrame[] = (data.frame_images || []).map((img: string, i: number) => ({
+        timestamp: data.captions[i]?.timestamp_sec || i,
+        timeLabel: data.captions[i]?.time || `Frame ${i + 1}`,
+        dataUrl: img,
+        blob: new Blob(),
+      }));
+      setFrames(extractedFrames);
+
+      const captionResults: CaptionResult[] = (data.captions || []).map((c: any) => ({
+        timeLabel: c.time,
+        caption: c.text,
+        importance: c.confidence || c.attention_weight || 0.5,
+      }));
+      setCaptions(captionResults);
+
+      if (data.summary) {
+        setSummaryResult({
+          summary: data.summary,
+          keyEvents: data.captions?.map((c: any) => `[${c.time}] ${c.text}`) || [],
+          alertLevel: "normal",
+        });
+      }
+
+      toast.success(`Pipeline complete in ${data.processing_time}s!`);
+    } catch (err: any) {
+      console.error("Local backend error:", err);
+      if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
+        toast.error("Cannot connect to local backend. Make sure it's running: uvicorn app:app --reload --port 8000");
+      } else {
+        toast.error(err.message || "Failed to process video");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [frameCount, localBackendUrl]);
+
+  // =============================================
+  // CLOUD BACKEND (Supabase Edge Functions) 
+  // =============================================
+  const runCaptionPipeline = useCallback(async (
+    extractedFrames: { timeLabel: string; imageBase64: string }[],
+    name: string
+  ) => {
+    for (let stage = 1; stage <= 3; stage++) {
+      setPipelineStage(stage);
+      setPipelineLogs(prev => [...prev, `[${stage}.0s] ${PIPELINE_STAGES[stage]} — processing...`]);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    setPipelineStage(4);
+    setPipelineLogs(prev => [...prev, "[4.0s] Generating captions with Vision AI..."]);
+    toast.info("Generating captions with Vision AI...");
+    const { data: captionData, error: captionError } = await supabase.functions.invoke("video-caption", {
+      body: { action: "caption", frames: extractedFrames },
+    });
+    if (captionError) throw captionError;
+    if (captionData.error) throw new Error(captionData.error);
+    setCaptions(captionData.captions);
+    setPipelineLogs(prev => [...prev, `  ✓ Generated ${captionData.captions.length} captions`]);
+
+    setPipelineStage(5);
+    setPipelineLogs(prev => [...prev, "[5.0s] Generating video summary..."]);
+    toast.info("Generating video summary...");
+    const { data: summaryData, error: summaryError } = await supabase.functions.invoke("video-caption", {
+      body: { action: "summarize", captions: captionData.captions },
+    });
+    if (summaryError) throw summaryError;
+    if (summaryData.error) throw new Error(summaryData.error);
+    setSummaryResult(summaryData);
+    setPipelineLogs(prev => [...prev, "  ✓ Summary generated", "PIPELINE COMPLETE"]);
+    toast.success("Video analysis complete!");
+  }, []);
+
+  const processVideoCloud = useCallback(async (file: File) => {
+    setIsProcessing(true);
+    setCaptions([]);
+    setSummaryResult(null);
+    setTranslatedCaptions(null);
+    setTranslatedSummary(null);
+    setPipelineLogs([]);
+    setVideoName(file.name);
+
+    try {
+      setPipelineStage(0);
+      setPipelineLogs([`[0.0s] Extracting ${frameCount} frames from video...`]);
       toast.info(`Extracting ${frameCount} frames from video...`);
       const extracted = await extractFrames(file, frameCount);
       setFrames(extracted);
+      setPipelineLogs(prev => [...prev, `  ✓ Extracted ${extracted.length} frames`]);
 
       await runCaptionPipeline(
         extracted.map((f) => ({ timeLabel: f.timeLabel, imageBase64: f.dataUrl })),
@@ -114,16 +204,26 @@ const Index: React.FC = () => {
     }
   }, [frameCount, runCaptionPipeline]);
 
+  const processVideo = useCallback(async (file: File) => {
+    if (backendMode === "local") {
+      await processVideoLocal(file);
+    } else {
+      await processVideoCloud(file);
+    }
+  }, [backendMode, processVideoLocal, processVideoCloud]);
+
   const processYouTube = useCallback(async (url: string) => {
     setIsProcessing(true);
     setCaptions([]);
     setSummaryResult(null);
     setTranslatedCaptions(null);
     setTranslatedSummary(null);
+    setPipelineLogs([]);
     setVideoName(url);
 
     try {
       setPipelineStage(0);
+      setPipelineLogs(["[0.0s] Fetching YouTube video thumbnails..."]);
       toast.info("Fetching YouTube video thumbnails...");
 
       const { data, error } = await supabase.functions.invoke("video-caption", {
@@ -134,7 +234,6 @@ const Index: React.FC = () => {
 
       setVideoName(data.title || url);
 
-      // Convert to ExtractedFrame format for display
       const ytFrames: ExtractedFrame[] = data.frames.map((f: any, i: number) => ({
         timestamp: i,
         timeLabel: f.timeLabel,
@@ -194,11 +293,32 @@ const Index: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-primary animate-pulse-glow" />
-            <span className="font-mono text-xs text-muted-foreground">
-              CNN → BiLSTM → Attention → Transformer
-            </span>
+          <div className="flex items-center gap-4">
+            {/* Backend mode selector */}
+            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
+              <button
+                onClick={() => setBackendMode("cloud")}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors ${
+                  backendMode === "cloud" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Cloud className="w-3 h-3" /> Cloud
+              </button>
+              <button
+                onClick={() => setBackendMode("local")}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors ${
+                  backendMode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Server className="w-3 h-3" /> Local DL
+              </button>
+            </div>
+            <div className="hidden md:flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-primary animate-pulse-glow" />
+              <span className="font-mono text-xs text-muted-foreground">
+                CNN → BiLSTM → Attention → Transformer
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -213,6 +333,22 @@ const Index: React.FC = () => {
               Upload any video or paste a YouTube link to generate frame-level captions,
               video summaries, and multilingual translations.
             </p>
+            {backendMode === "local" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 flex items-center justify-center gap-2">
+                <div className="bg-muted border border-border rounded-lg px-4 py-2 flex items-center gap-2">
+                  <Server className="w-4 h-4 text-primary" />
+                  <span className="font-mono text-xs text-muted-foreground">
+                    Local DL Backend: 
+                  </span>
+                  <input
+                    type="text"
+                    value={localBackendUrl}
+                    onChange={(e) => setLocalBackendUrl(e.target.value)}
+                    className="bg-transparent border-b border-primary/30 text-xs font-mono text-foreground px-1 py-0.5 w-48 focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         )}
 
@@ -235,9 +371,16 @@ const Index: React.FC = () => {
 
             {videoName && (
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-4 py-3">
-                <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">
-                  📂 {videoName}
-                </span>
+                <div className="flex items-center gap-2">
+                  {backendMode === "local" ? (
+                    <Server className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <Cloud className="w-3.5 h-3.5 text-primary" />
+                  )}
+                  <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">
+                    {videoName}
+                  </span>
+                </div>
                 <div className="flex items-center gap-4">
                   {captions.length > 0 && summaryResult && (
                     <ExportButton
@@ -253,11 +396,16 @@ const Index: React.FC = () => {
                   {captions.length > 0 && (
                     <div className="flex items-center gap-2">
                       <Switch id="show-frames" checked={showFrames} onCheckedChange={setShowFrames} />
-                      <Label htmlFor="show-frames" className="text-xs text-muted-foreground">Show frames</Label>
+                      <Label htmlFor="show-frames" className="text-xs text-muted-foreground">Frames</Label>
                     </div>
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Pipeline Logs — shows backend console output */}
+            {pipelineLogs.length > 0 && (
+              <PipelineLogs logs={pipelineLogs} isProcessing={isProcessing} />
             )}
 
             {captions.length > 0 && (
