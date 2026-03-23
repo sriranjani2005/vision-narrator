@@ -1,0 +1,33 @@
+# ============================================================
+# HAVCM Backend - Deep Learning Video Captioning System
+# Requirements for CNN → BiLSTM → Attention → Transformer
+# ============================================================
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Deep Learning
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
+
+# Computer Vision
+opencv-python-headless==4.9.0.80
+Pillow==10.2.0
+
+# NLP & Transformers
+transformers==4.36.2
+sentencepiece==0.1.99
+
+# Summarization (TextRank)
+sumy==0.11.0
+nltk==3.8.1
+
+# Translation
+googletrans==4.0.0rc1
+
+# Utilities
+numpy==1.26.3
+tqdm==4.66.1
